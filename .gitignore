@@ -1,0 +1,28 @@
+﻿# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build results
+bin/
+obj/
+
+# Rider
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Android
+*.keystore
+
+# iOS
+*.xcuserstate
+*.xcworkspace
+*.xcuserdata
+
+# Logs
+*.log
