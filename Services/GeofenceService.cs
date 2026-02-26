@@ -1,4 +1,4 @@
-using MauiApp1.Models;
+﻿using MauiApp1.Models;
 using Microsoft.Maui.Devices.Sensors;
 
 namespace MauiApp1.Services;
@@ -8,6 +8,7 @@ public class GeofenceService
     private readonly AudioService _audioService;
     private List<Poi> _pois = new();
     private readonly HashSet<int> _alreadyTriggered = new();
+    private readonly SemaphoreSlim _gate = new(1, 1);
 
     public GeofenceService(AudioService audioService)
     {
@@ -22,28 +23,36 @@ public class GeofenceService
 
     public async Task CheckLocationAsync(Location location)
     {
-        foreach (var poi in _pois.OrderByDescending(p => p.Priority))
+        if (!await _gate.WaitAsync(0)) return; // đang chạy thì bỏ qua tick này
+        try
         {
-            var distanceMeters = DistanceInMeters(
-                location.Latitude, location.Longitude,
-                poi.Latitude, poi.Longitude
-            );
-
-            if (distanceMeters <= poi.Radius)
+            foreach (var poi in _pois.OrderByDescending(p => p.Priority))
             {
-                if (_alreadyTriggered.Contains(poi.Id)) continue;
+                var distanceMeters = DistanceInMeters(
+                    location.Latitude, location.Longitude,
+                    poi.Latitude, poi.Longitude
+                );
 
-                var text = poi.GetDescription("en");
-                if (string.IsNullOrWhiteSpace(text))
-                    text = poi.GetName("en");
+                if (distanceMeters <= poi.Radius)
+                {
+                    if (_alreadyTriggered.Contains(poi.Id)) continue;
 
-                await _audioService.SpeakAsync(text);
-                _alreadyTriggered.Add(poi.Id);
+                    var text = poi.GetDescription("en");
+                    if (string.IsNullOrWhiteSpace(text))
+                        text = poi.GetName("en");
+
+                    await _audioService.SpeakAsync(text);
+                    _alreadyTriggered.Add(poi.Id);
+                }
+                else if (distanceMeters > poi.Radius * 1.2)
+                {
+                    _alreadyTriggered.Remove(poi.Id);
+                }
             }
-            else if (distanceMeters > poi.Radius * 1.2)
-            {
-                _alreadyTriggered.Remove(poi.Id);
-            }
+        }
+        finally
+        {
+            _gate.Release();
         }
     }
 

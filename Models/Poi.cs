@@ -1,25 +1,26 @@
-﻿namespace MauiApp1.Models;
+﻿using SQLite;
 
+namespace MauiApp1.Models;
+
+[Table("pois")]
 public class Poi
 {
+    [PrimaryKey, AutoIncrement]
     public int Id { get; set; }
+
     public string Name { get; set; } = "";
     public string Description { get; set; } = "";
-
-    // Localized versions (language code -> string), optional
-    public Dictionary<string, string> LocalizedNames { get; set; } = new();
-    public Dictionary<string, string> LocalizedDescriptions { get; set; } = new();
 
     public double Latitude { get; set; }
     public double Longitude { get; set; }
 
-    public double Radius { get; set; } = 50; // mét
+    public double Radius { get; set; } = 50;
     public int Priority { get; set; } = 1;
 
-    // Helper để lấy văn bản theo ngôn ngữ, fallback về Name/Description
-    public string GetName(string languageCode = "en")
-        => LocalizedNames.TryGetValue(languageCode, out var n) ? n : Name;
+    // ❌ Không lưu localization vào DB (để sau)
+    [Ignore] public Dictionary<string, string> LocalizedNames { get; set; } = new();
+    [Ignore] public Dictionary<string, string> LocalizedDescriptions { get; set; } = new();
 
-    public string GetDescription(string languageCode = "en")
-        => LocalizedDescriptions.TryGetValue(languageCode, out var d) ? d : Description;
+    public string GetName(string lang = "en") => Name;
+    public string GetDescription(string lang = "en") => Description;
 }

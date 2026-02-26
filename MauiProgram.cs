@@ -1,7 +1,8 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using MauiApp1.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Maui.Controls.Hosting;
 using Microsoft.Maui.Controls.Maps;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace MauiApp1
 {
@@ -9,6 +10,7 @@ namespace MauiApp1
     {
         public static MauiApp CreateMauiApp()
         {
+            SQLitePCL.Batteries_V2.Init();
             var builder = MauiApp.CreateBuilder();
             builder
                 .UseMauiApp<App>()
@@ -24,13 +26,17 @@ namespace MauiApp1
 #endif
 
             // Register app services and viewmodels for DI
+            builder.Services.AddSingleton<PoiDatabase>();
             builder.Services.AddSingleton<Services.LocationService>();
             builder.Services.AddSingleton<Services.AudioService>();
             builder.Services.AddSingleton<Services.GeofenceService>();
             builder.Services.AddSingleton<ViewModels.MapViewModel>();
             builder.Services.AddTransient<Views.MapPage>();
 
-            return builder.Build();
+            var app = builder.Build();
+
+
+            return app;
         }
     }
 }

@@ -4,21 +4,19 @@ namespace MauiApp1.Services;
 
 public class LocationService
 {
+    private bool _permissionGranted;
+
     public async Task<Location?> GetCurrentLocationAsync()
     {
-        var status = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
-        if (status != PermissionStatus.Granted)
+        if (!_permissionGranted)
         {
-            status = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
-            if (status != PermissionStatus.Granted)
-                return null;
+            var status = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+            if (status != PermissionStatus.Granted) return null;
+            _permissionGranted = true;
         }
 
-        var request = new GeolocationRequest(
-            GeolocationAccuracy.Best,
-            TimeSpan.FromSeconds(10)
+        return await Geolocation.GetLocationAsync(
+            new GeolocationRequest(GeolocationAccuracy.High, TimeSpan.FromSeconds(10))
         );
-
-        return await Geolocation.GetLocationAsync(request);
     }
 }

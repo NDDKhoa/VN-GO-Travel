@@ -4,14 +4,19 @@ namespace MauiApp1.Services;
 
 public class AudioService
 {
-    private bool _isSpeaking;
+    private readonly SemaphoreSlim _audioGate = new(1, 1);
+
     public async Task SpeakAsync(string text)
     {
-        if (_isSpeaking) return;
-
-        _isSpeaking = true;
-        await TextToSpeech.SpeakAsync(text);
-        _isSpeaking = false;
+        if (!await _audioGate.WaitAsync(0)) return;
+        try
+        {
+            await TextToSpeech.SpeakAsync(text);
+        }
+        finally
+        {
+            _audioGate.Release();
+        }
     }
 
 }
