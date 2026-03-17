@@ -25,28 +25,52 @@ public class GeofenceService
     public async Task CheckLocationAsync(Location location)
     {
         if (!await _gate.WaitAsync(0)) return;
+
         try
         {
-            foreach (var poi in _pois.OrderByDescending(p => p.Priority))
-            {
-                var distanceMeters = DistanceInMeters(
-                    location.Latitude, location.Longitude,
-                    poi.Latitude, poi.Longitude
-                );
-
-                if (distanceMeters <= poi.Radius)
+            var candidates = _pois
+                .Select(p => new
                 {
-                    if (_alreadyTriggered.Contains(poi.Id)) continue;
+                    Poi = p,
+                    Distance = DistanceInMeters(
+                        location.Latitude, location.Longitude,
+                        p.Latitude, p.Longitude)
+                })
+                // chỉ lấy những POI trong vùng
+                .Where(x => x.Distance <= x.Poi.Radius)
+                // ưu tiên cao trước
+                .OrderByDescending(x => x.Poi.Priority)
+                // nếu cùng priority thì lấy gần nhất
+                .ThenBy(x => x.Distance)
+                .ToList();
 
-                    // Use flattened NarrationShort for geofence-triggered audio, fallback to Name
-                    var text = !string.IsNullOrWhiteSpace(poi.NarrationShort) ? poi.NarrationShort : poi.Name;
+            var best = candidates.FirstOrDefault();
+
+            if (best != null)
+            {
+                var poi = best.Poi;
+
+                if (!_alreadyTriggered.Contains(poi.Id))
+                {
+                    var text = !string.IsNullOrWhiteSpace(poi.NarrationShort)
+                        ? poi.NarrationShort
+                        : poi.Name;
 
                     if (!string.IsNullOrWhiteSpace(text))
                         await _audioService.SpeakAsync(text, CurrentLanguage);
 
                     _alreadyTriggered.Add(poi.Id);
                 }
-                else if (distanceMeters > poi.Radius * 1.2)
+            }
+
+            // reset trigger khi ra xa
+            foreach (var poi in _pois)
+            {
+                var distance = DistanceInMeters(
+                    location.Latitude, location.Longitude,
+                    poi.Latitude, poi.Longitude);
+
+                if (distance > poi.Radius * 1.2)
                 {
                     _alreadyTriggered.Remove(poi.Id);
                 }

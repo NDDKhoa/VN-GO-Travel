@@ -5,15 +5,18 @@ namespace MauiApp1.Services;
 public class AudioService
 {
     // Khai báo đèn giao thông (chỉ cho phép 1 luồng âm thanh chạy tại 1 thời điểm)
-    private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
+    private readonly SemaphoreSlim _lock = new(1, 1);
     private CancellationTokenSource? _cts;
 
     public async Task SpeakAsync(string text, string languageCode)
     {
+        if (!await _lock.WaitAsync(0))
+            return;
+
         try
         {
-            // ❌ Hủy audio cũ
             _cts?.Cancel();
+            _cts?.Dispose();
             _cts = new CancellationTokenSource();
 
             var locales = await TextToSpeech.Default.GetLocalesAsync();
@@ -28,16 +31,12 @@ public class AudioService
                 Locale = selectedLocale
             };
 
-            // ✅ luôn đọc cái mới nhất
             await TextToSpeech.Default.SpeakAsync(text, options, _cts.Token);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) { }
+        finally
         {
-            // bị cắt -> OK
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Lỗi TTS: {ex.Message}");
+            _lock.Release();
         }
     }
 }

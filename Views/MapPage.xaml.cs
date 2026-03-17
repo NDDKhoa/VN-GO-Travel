@@ -13,11 +13,14 @@ public partial class MapPage : ContentPage
     private bool _poisDrawn;
     private CancellationTokenSource? _cts;
     private readonly Dictionary<Pin, Poi> _pinToPoi = new();
+    private Pin? _userPin;
 
     public MapPage(MapViewModel vm)
     {
         InitializeComponent();
         BindingContext = _vm = vm;
+
+        BottomPanel.Opacity = 0; // ✅ QUAN TRỌNG
     }
 
     // Sự kiện 1: Khi bấm vào Cây ghim đỏ trên bản đồ
@@ -34,7 +37,16 @@ public partial class MapPage : ContentPage
             e.HideInfoWindow = true;
 
             // 3. Báo cho ViewModel biết điểm nào đang được chọn để bật Bảng thông tin (Bottom Panel) lên
+            if (!BottomPanel.IsVisible)
+            {
+                BottomPanel.TranslationY = 300;
+                BottomPanel.Opacity = 0;
+            }
+
             _vm.SelectedPoi = poi;
+
+            await BottomPanel.TranslateToAsync(0, 0, 250, Easing.CubicOut);
+            await BottomPanel.FadeToAsync(1, 200);
 
             // 4. Vẫn đọc bài ngắn giới thiệu khi vừa bấm
             await _vm.PlayPoiAsync(poi, _vm.CurrentLanguage);
@@ -52,9 +64,11 @@ public partial class MapPage : ContentPage
     }
 
     // Khi bấm nút "Đóng"
-    private void OnClosePanelClicked(object sender, EventArgs e)
+    private async void OnClosePanelClicked(object sender, EventArgs e)
     {
-        // Gán bằng null để bảng thông tin tự động trượt xuống/biến mất
+        await BottomPanel.TranslateToAsync(0, 300, 200, Easing.CubicIn);
+        await BottomPanel.FadeToAsync(0, 150);
+
         _vm.SelectedPoi = null;
     }
     // ------------------------------------
@@ -62,6 +76,12 @@ public partial class MapPage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
+
+        if (BottomPanel != null)
+        {
+            BottomPanel.TranslationY = 300; // ẩn dưới màn hình
+        }
+
         _ = OnAppearingAsync();
     }
 
@@ -80,7 +100,7 @@ public partial class MapPage : ContentPage
         }
         catch (Exception ex)
         {
-            await DisplayAlert("Error", ex.Message, "OK");
+            await DisplayAlertAsync("Error", ex.Message, "OK");
         }
     }
 
@@ -114,9 +134,29 @@ public partial class MapPage : ContentPage
     {
         _vm.SelectedPoi = null;
         _poisDrawn = false;
+        _userPin = null;
 
         await _vm.LoadPoisAsync(_vm.CurrentLanguage);
         DrawPois();
+    }
+
+    private void DrawUserLocation(Location location)
+    {
+        if (_userPin == null)
+        {
+            _userPin = new Pin
+            {
+                Label = _vm.CurrentLanguage == "en" ? "You are here" : "Bạn đang ở đây",
+                Location = location,
+                Type = PinType.Generic
+            };
+
+            Map.Pins.Add(_userPin);
+        }
+        else
+        {
+            _userPin.Location = location;
+        }
     }
 
     private async Task StartTrackingAsync(CancellationToken ct)
@@ -133,6 +173,7 @@ public partial class MapPage : ContentPage
                 if (location == null) continue;
 
                 var center = new Location(location.Latitude, location.Longitude);
+                DrawUserLocation(center);
 
                 if (!_poisDrawn)
                 {
@@ -153,9 +194,15 @@ public partial class MapPage : ContentPage
 
     private void DrawPois()
     {
-        Map.Pins.Clear(); // THÊM DÒNG NÀY
+        Map.Pins.Clear();
         Map.MapElements.Clear();
         _pinToPoi.Clear();
+
+        // ❗ add lại user pin trước
+        if (_userPin != null)
+        {
+            Map.Pins.Add(_userPin);
+        }
 
         foreach (var poi in _vm.Pois)
         {
@@ -167,12 +214,11 @@ public partial class MapPage : ContentPage
                 Type = PinType.Place
             };
 
-                // Gắn 1 sự kiện duy nhất cho ghim
-                pin.MarkerClicked += OnPinMarkerClicked;
+            pin.MarkerClicked += OnPinMarkerClicked;
 
             Map.Pins.Add(pin);
-
             _pinToPoi[pin] = poi;
+
             Map.MapElements.Add(new Circle
             {
                 Center = pin.Location,
