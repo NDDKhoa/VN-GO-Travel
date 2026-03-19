@@ -57,7 +57,7 @@ public partial class MapPage : ContentPage
         }
         catch (Exception ex)
         {
-            await DisplayAlertAsync("Error", ex.Message, "OK");
+            await DisplayAlert("Error", ex.Message, "OK");
         }
     }
 

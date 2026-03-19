@@ -13,7 +13,6 @@ public partial class AppShell : Shell
         tabBar.Items.Add(new ShellContent
         {
             Title = "Khám phá",
-            Icon = "compass.png",
             Route = "explore",
             ContentTemplate = new DataTemplate(() => services.GetRequiredService<ExplorePage>())
         });
@@ -22,7 +21,6 @@ public partial class AppShell : Shell
         {
             Title = "Bản đồ",
             Route = "map",
-            Icon = "map.png",
             ContentTemplate = new DataTemplate(() => services.GetRequiredService<MapPage>())
         });
 
@@ -30,7 +28,6 @@ public partial class AppShell : Shell
         {
             Title = "Giới thiệu",
             Route = "about",
-            Icon = "book.png",
             ContentTemplate = new DataTemplate(() => services.GetRequiredService<AboutPage>())
         });
 

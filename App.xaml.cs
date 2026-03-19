@@ -2,9 +2,10 @@
 
 public partial class App : Application
 {
-    public App(AppShell shell)
+    public App(IServiceProvider services)
     {
         InitializeComponent();
-        MainPage = shell;
+
+        MainPage = services.GetRequiredService<AppShell>();
     }
 }
