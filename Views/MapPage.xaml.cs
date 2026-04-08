@@ -1,4 +1,5 @@
 using MauiApp1.Models;
+using MauiApp1.Services;
 using MauiApp1.ViewModels;
 using Microsoft.Maui.Controls.Maps;
 using Microsoft.Maui.Maps;
@@ -6,9 +7,14 @@ using System.Diagnostics;
 
 namespace MauiApp1.Views;
 
-public partial class MapPage : ContentPage
+/// <summary>
+/// Map-first QR entry: Shell navigates with <c>//map?code=&amp;lang=&amp;narrate=1</c> (see <see cref="MauiApp1.Services.PoiEntryCoordinator"/>).
+/// </summary>
+public partial class MapPage : ContentPage, IQueryAttributable
 {
     private readonly MapViewModel _vm;
+    private readonly LanguageSelectorViewModel _langSelectorVm;
+    private bool _pendingNarrateAfterFocus;
     private PeriodicTimer? _timer;
     private CancellationTokenSource? _cts;
 
@@ -21,13 +27,67 @@ public partial class MapPage : ContentPage
     private string? _lastAutoPoiId;
     private bool _isUserSelecting;
 
-    public MapPage(MapViewModel vm)
+    public MapPage(MapViewModel vm, LanguageSelectorViewModel langSelectorVm)
     {
         InitializeComponent();
         BindingContext = _vm = vm;
+        _langSelectorVm = langSelectorVm;
 
         InitBottomPanel();
-        UpdateLanguageButtons();
+
+        _vm.PoisRefreshed += (_, _) =>
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                try
+                {
+                    DrawPois();
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"[MAP-ERR] DrawPois after language change: {ex}");
+                }
+            });
+        };
+    }
+
+    /// <summary>Shell query from coordinator: <c>code</c>, <c>lang</c>, optional <c>narrate=1</c> after QR scan.</summary>
+    public void ApplyQueryAttributes(IDictionary<string, object> query)
+    {
+        try
+        {
+            if (query == null || !query.TryGetValue("code", out var codeObj) || codeObj == null)
+                return;
+
+            var rawCode = codeObj.ToString()?.Trim();
+            if (string.IsNullOrWhiteSpace(rawCode))
+                return;
+
+            var code = Uri.UnescapeDataString(rawCode);
+
+            string? lang = null;
+            if (query.TryGetValue("lang", out var langObj) && langObj != null)
+            {
+                var ls = langObj.ToString()?.Trim();
+                if (!string.IsNullOrWhiteSpace(ls))
+                    lang = Uri.UnescapeDataString(ls);
+            }
+
+            var narrate = false;
+            if (query.TryGetValue("narrate", out var narObj) && narObj != null)
+            {
+                var s = narObj.ToString();
+                narrate = s == "1" || string.Equals(s, "true", StringComparison.OrdinalIgnoreCase);
+            }
+
+            _pendingNarrateAfterFocus = narrate;
+            _vm.RequestFocusOnPoiCode(code, lang);
+            Debug.WriteLine($"[MAP-QR] ApplyQuery code={code} lang={lang} narrate={narrate}");
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[MAP-QR] ApplyQueryAttributes error: {ex}");
+        }
     }
 
     private void InitBottomPanel()
@@ -54,10 +114,8 @@ public partial class MapPage : ContentPage
             Debug.WriteLine($"[MAP-TIME] Starting LoadPoisAsync (background)");
             var loadTask = _vm.LoadPoisAsync();
 
-            // Capture any pending focus and ensure focus happens after load completes
             var pendingFocus = _vm.ConsumePendingFocusRequest();
 
-            // When load completes, draw POIs on main thread immediately (don't wait for tracking tick)
             loadTask.ContinueWith(async t =>
             {
                 try
@@ -79,7 +137,6 @@ public partial class MapPage : ContentPage
                         }
                     });
 
-                    // If there was a pending focus request, perform focus now on main thread
                     if (!string.IsNullOrWhiteSpace(pendingFocus.code))
                     {
                         await MainThread.InvokeOnMainThreadAsync(async () =>
@@ -101,10 +158,26 @@ public partial class MapPage : ContentPage
                     Debug.WriteLine($"[MAP-ERR] loadTask continuation: {ex}");
                 }
             }, TaskScheduler.Default);
-            UpdateLanguageButtons();
         }
-
-        // pending focus handled by loadTask continuation above (if any)
+        else
+        {
+            var pendingFocus = _vm.ConsumePendingFocusRequest();
+            if (!string.IsNullOrWhiteSpace(pendingFocus.code))
+            {
+                Debug.WriteLine($"[MAP-TIME] Handling pending focus on already-drawn map: code={pendingFocus.code} narrate={_pendingNarrateAfterFocus}");
+                await MainThread.InvokeOnMainThreadAsync(async () =>
+                {
+                    try
+                    {
+                        await FocusOnPoiByCodeAsync(pendingFocus.code, pendingFocus.lang);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"[MAP-ERR] Pending focus on already-drawn map: {ex}");
+                    }
+                });
+            }
+        }
 
         if (!_isTracking)
         {
@@ -258,7 +331,7 @@ public partial class MapPage : ContentPage
         {
             _userPin = new Pin
             {
-                Label = "Bạn đang ở đây",
+                Label = "Ban dang o day",
                 Location = location
             };
 
@@ -288,7 +361,7 @@ public partial class MapPage : ContentPage
 
             var pin = new Pin
             {
-                Label = poi.Name,
+                Label = poi.Localization?.Name ?? "",
                 Location = location
             };
 
@@ -335,6 +408,7 @@ public partial class MapPage : ContentPage
         var poi = _vm.SelectedPoi;
         if (poi == null)
         {
+            _pendingNarrateAfterFocus = false;
             Debug.WriteLine($"[Map] No POI found for code='{code}' in current language='{_vm.CurrentLanguage}'");
             return;
         }
@@ -350,6 +424,12 @@ public partial class MapPage : ContentPage
                 MapSpan.FromCenterAndRadius(location, Distance.FromMeters(220)));
 
             await ShowBottomPanelAsync();
+
+            if (_pendingNarrateAfterFocus)
+            {
+                _pendingNarrateAfterFocus = false;
+                await _vm.PlayPoiAsync(poi, lang ?? _vm.CurrentLanguage);
+            }
         });
     }
 
@@ -386,50 +466,13 @@ public partial class MapPage : ContentPage
         var poi = _vm.SelectedPoi;
         if (poi == null) return;
 
-        var route = $"/poidetail?code={Uri.EscapeDataString(poi.Code)}&lang={Uri.EscapeDataString(poi.LanguageCode)}";
+        var route = $"/poidetail?code={Uri.EscapeDataString(poi.Code)}&lang={Uri.EscapeDataString(_vm.CurrentLanguage)}";
         await Shell.Current.GoToAsync(route);
     }
 
-    private async void OnVietnameseClicked(object sender, EventArgs e)
+    private async void OnLanguageButtonClicked(object sender, EventArgs e)
     {
-        await ReloadLanguageAsync("vi");
-    }
-
-    private async void OnEnglishClicked(object sender, EventArgs e)
-    {
-        await ReloadLanguageAsync("en");
-    }
-
-    private async Task ReloadLanguageAsync(string lang)
-    {
-        _vm.SetLanguage(lang);
-        _vm.StopAudio();
-
-        _isUserSelecting = false;
-        _lastAutoPoiId = null;
-        _vm.SelectedPoi = null;
-
-        await _vm.LoadPoisAsync(lang);
-
-        UpdateLanguageButtons();
-        DrawPois();
-    }
-
-    private void UpdateLanguageButtons()
-    {
-        if (_vm.CurrentLanguage == "en")
-        {
-            EnglishButton.BackgroundColor = Color.FromArgb("#D94E2A");
-            EnglishButton.TextColor = Colors.White;
-
-            VietnameseButton.BackgroundColor = Color.FromArgb("#F4ECE7");
-        }
-        else
-        {
-            VietnameseButton.BackgroundColor = Color.FromArgb("#D94E2A");
-            VietnameseButton.TextColor = Colors.White;
-
-            EnglishButton.BackgroundColor = Color.FromArgb("#F4ECE7");
-        }
+        var page = new LanguageSelectorPage(_langSelectorVm);
+        await Navigation.PushModalAsync(page, animated: true);
     }
 }

@@ -25,7 +25,7 @@
                 StrokeShape="RoundRectangle 24"
                 VerticalOptions="Start">
 
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
 
                 <Border BackgroundColor="#F8E9E0"
                         Padding="10"
@@ -43,21 +43,22 @@
                            TextColor="{StaticResource TextSecondary}" />
                 </VerticalStackLayout>
 
-                <Button x:Name="VietnameseButton"
-                        Grid.Column="2"
-                        Text="VN"
-                        Clicked="OnVietnameseClicked"
-                        WidthRequest="46"
-                        HeightRequest="40"
-                        CornerRadius="14" />
+                <ActivityIndicator Grid.Column="2"
+                                   IsRunning="{Binding IsTranslating}"
+                                   IsVisible="{Binding IsTranslating}"
+                                   VerticalOptions="Center"
+                                   WidthRequest="28"
+                                   HeightRequest="28" />
 
-                <Button x:Name="EnglishButton"
-                        Grid.Column="3"
-                        Text="EN"
-                        Clicked="OnEnglishClicked"
-                        WidthRequest="46"
+                <!-- Language selector button — opens LanguageSelectorPage modal -->
+                <Button Grid.Column="3"
+                        Text="{Binding CurrentLanguageLabel}"
+                        Style="{StaticResource SecondaryButton}"
+                        FontSize="13"
                         HeightRequest="40"
-                        CornerRadius="14" />
+                        WidthRequest="150"
+                        VerticalOptions="Center"
+                        Clicked="OnLanguageButtonClicked" />
 
                 <!-- QR button removed: QR tab added to Shell -->
             </Grid>
@@ -99,28 +100,42 @@
                                  Padding="20,8"
                                  Spacing="8">
 
-                        <Label Text="{Binding SelectedPoi.Name}"
+                        <Label Text="{Binding SelectedPoi.Localization.Name}"
                        FontSize="20"
                        FontAttributes="Bold"
                        TextColor="{StaticResource TextPrimary}" />
 
-                        <Label Text="{Binding SelectedPoi.NarrationShort}"
+                        <Label Text="{Binding SelectedPoi.Localization.NarrationShort}"
                        FontSize="14"
                        TextColor="{StaticResource TextSecondary}" />
+
+                        <Label Text="Auto translated"
+                               FontSize="11"
+                               FontAttributes="Italic"
+                               TextColor="{StaticResource TextSecondary}"
+                               IsVisible="{Binding SelectedPoi.IsAutoTranslated}" />
                     </VerticalStackLayout>
 
                 <!-- BUTTONS -->
                     <Grid Grid.Row="2"
                   Padding="16"
+                  RowDefinitions="Auto,Auto"
                   ColumnDefinitions="*,*"
-                  ColumnSpacing="10">
+                  ColumnSpacing="10"
+                  RowSpacing="10">
 
                         <Button Text="🔊 Nghe chi tiết"
                                 Style="{StaticResource PrimaryButton}"
                                 Clicked="OnListenDetailedClicked" />
 
                         <Button Grid.Column="1"
-                                Text="Chi tiết"
+                        Text="⏹ Dừng"
+                        Style="{StaticResource SecondaryButton}"
+                        Clicked="OnStopAudioClicked" />
+
+                        <Button Grid.Row="1"
+                                Grid.ColumnSpan="2"
+                                Text="📄 Xem chi tiết địa điểm"
                                 Style="{StaticResource SecondaryButton}"
                                 Clicked="OnOpenDetailClicked" />
                     </Grid>

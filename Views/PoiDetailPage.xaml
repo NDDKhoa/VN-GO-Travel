@@ -8,9 +8,17 @@
 
     <ScrollView>
         <VerticalStackLayout Padding="16" Spacing="12">
-            <Label Text="{Binding Poi.Name}" FontSize="20" FontAttributes="Bold" />
-            <Label Text="{Binding Poi.Summary}" FontSize="14" />
-            <Label Text="{Binding Poi.NarrationShort}" FontSize="14" TextColor="{StaticResource TextSecondary}" />
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+
+            <Label Text="{Binding Poi.Localization.Name}" FontSize="20" FontAttributes="Bold" />
+            <Label Text="{Binding Poi.Localization.Summary}" FontSize="14" />
+            <Label Text="{Binding Poi.Localization.NarrationShort}" FontSize="14" TextColor="{StaticResource TextSecondary}" />
+
+            <Label Text="Auto translated"
+                   FontSize="11"
+                   FontAttributes="Italic"
+                   TextColor="{StaticResource TextSecondary}"
+                   IsVisible="{Binding Poi.IsAutoTranslated}" />
 
             <HorizontalStackLayout Spacing="10">
                 <Button Text="🗺 Open on Map" Clicked="OnOpenOnMapClicked" />
